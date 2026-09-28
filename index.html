@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Golf Swing Analyzer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 16px;
+      color: #58a6ff;
+    }
+
+    .layout {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+      max-width: 1100px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    /* ── Video Section ── */
+    .video-section {
+      flex: 1 1 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #161b22;
+      border: 1px solid #30363d;
+    }
+
+    #inputVideo {
+      display: none;
+    }
+
+    #outputCanvas {
+      display: block;
+      width: 100%;
+      border-radius: 10px;
+    }
+
+    .phase-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0,0,0,0.65);
+      border: 1px solid #58a6ff;
+      color: #58a6ff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .fps-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0,0,0,0.55);
+      color: #8b949e;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:disabled { opacity: 0.4; cursor: default; }
+
+    #btnStart    { background: #238636; color: #fff; }
+    .btn-upload  { background: #6e40c9; color: #fff; display:flex; align-items:center; justify-content:center; }
+    .btn-upload:hover { opacity: 0.85; cursor: pointer; }
+    #btnRecord   { background: #1f6feb; color: #fff; }
+    #btnRecord.recording { background: #da3633; }
+    #btnReplay   { background: #388bfd22; color: #58a6ff; border: 1px solid #388bfd66; }
+
+    /* ── Replay ── */
+    #replaySection {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #replaySection h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8b949e;
+    }
+
+    #replayCanvas {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+    }
+
+    #replayControls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #replaySlider {
+      flex: 1;
+      accent-color: #58a6ff;
+    }
+
+    /* ── Side Panel ── */
+    .side-panel {
+      flex: 0 0 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #8b949e;
+      margin-bottom: 12px;
+    }
+
+    /* ── Metrics ── */
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .metric:last-child { margin-bottom: 0; }
+
+    .metric-label {
+      font-size: 0.82rem;
+      color: #8b949e;
+    }
+
+    .metric-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #e6edf3;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    /* ── Balance bar ── */
+    .balance-bar-wrap {
+      margin-top: 4px;
+    }
+
+    .balance-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #8b949e;
+      margin-bottom: 4px;
+    }
+
+    .balance-bar-track {
+      height: 10px;
+      background: #21262d;
+      border-radius: 5px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .balance-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #388bfd, #58a6ff);
+      border-radius: 5px;
+      width: 50%;
+      transition: width 0.15s;
+    }
+
+    .balance-center {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: #30363d;
+      transform: translateX(-50%);
+    }
+
+    /* ── Score panel ── */
+    .score-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .score-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+
+    .score-name { color: #c9d1d9; }
+
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+
+    .badge.pass  { background: #1a4731; color: #3fb950; }
+    .badge.fail  { background: #3d1a1a; color: #f85149; }
+    .badge.wait  { background: #21262d; color: #8b949e; }
+
+    /* ── Hip rotation sparkline ── */
+    #sparkCanvas {
+      width: 100%;
+      height: 50px;
+      border-radius: 6px;
+      background: #0d1117;
+      display: block;
+    }
+
+    /* ── Status bar ── */
+    #statusBar {
+      font-size: 0.78rem;
+      color: #8b949e;
+      text-align: center;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>⛳ Golf Swing Analyzer</h1>
+
+<div class="layout">
+
+  <!-- ── LEFT: Video ── -->
+  <div class="video-section">
+    <div class="canvas-wrapper">
+      <video id="inputVideo" playsinline></video>
+      <canvas id="outputCanvas" width="640" height="480"></canvas>
+      <div class="phase-badge" id="phaseBadge">Waiting…</div>
+      <div class="fps-badge" id="fpsBadge">— fps</div>
+    </div>
+
+    <div class="controls">
+      <button id="btnStart">▶ Start Camera</button>
+      <label id="btnUpload" class="btn-upload" title="Analyze a video file instead of webcam">📂 Upload Video</label>
+      <input type="file" id="fileInput" accept="video/*" style="display:none" />
+      <button id="btnRecord" disabled>⏺ Record Swing</button>
+      <button id="btnReplay" disabled>⏵ Replay</button>
+    </div>
+
+    <!-- File video seek bar (shown only in file-mode) -->
+    <div id="fileSeekSection" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+        <button id="btnPlayPause" style="flex:0 0 auto;padding:6px 12px;font-size:0.82rem;">⏸ Pause</button>
+        <input type="range" id="fileSeekBar" min="0" value="0" step="0.033" style="flex:1;accent-color:#58a6ff;" />
+        <span id="fileTimeDisplay" style="font-size:0.78rem;color:#8b949e;white-space:nowrap">0.0s / 0.0s</span>
+      </div>
+    </div>
+
+    <div id="replaySection">
+      <h3>Recorded Swing Replay</h3>
+      <canvas id="replayCanvas" width="640" height="480"></canvas>
+      <div id="replayControls">
+        <input type="range" id="replaySlider" min="0" value="0" step="1" />
+        <span id="replayTime" style="font-size:0.78rem;color:#8b949e;white-space:nowrap">0.0s</span>
+      </div>
+    </div>
+
+    <div id="statusBar">Click "Start Camera" to begin.</div>
+  </div>
+
+  <!-- ── RIGHT: Panel ── -->
+  <div class="side-panel">
+
+    <div class="card">
+      <h2>Real-time Metrics</h2>
+      <div class="metric">
+        <span class="metric-label">Spine Angle</span>
+        <span class="metric-value" id="mSpine">—°</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Hip Rotation</span>
+        <span class="metric-value" id="mHip">—°</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Swing Phase</span>
+        <span class="metric-value" id="mPhase" style="font-size:0.82rem;color:#58a6ff">—</span>
+      </div>
+      <div class="balance-bar-wrap">
+        <div class="balance-bar-labels"><span>Left</span><span>Balance</span><span>Right</span></div>
+        <div class="balance-bar-track">
+          <div class="balance-bar-fill" id="balanceBar"></div>
+          <div class="balance-center"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Hip Rotation History</h2>
+      <canvas id="sparkCanvas"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Swing Score</h2>
+      <div class="score-list">
+        <div class="score-item">
+          <span class="score-name">Spine Angle</span>
+          <span class="badge wait" id="sSpine">WAIT</span>
+        </div>
+        <div class="score-item">
+          <span class="score-name">Hip Rotation</span>
+          <span class="badge wait" id="sHip">WAIT</span>
+        </div>
+        <div class="score-item">
+          <span class="score-name">Balance</span>
+          <span class="badge wait" id="sBalance">WAIT</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MediaPipe CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+// ─────────────────────────────────────────────
+//  CONSTANTS & LANDMARK INDICES
+// ─────────────────────────────────────────────
+const LM = {
+  NOSE: 0,
+  L_SHOULDER: 11, R_SHOULDER: 12,
+  L_ELBOW: 13,    R_ELBOW: 14,
+  L_WRIST: 15,    R_WRIST: 16,
+  L_HIP: 23,      R_HIP: 24,
+  L_KNEE: 25,     R_KNEE: 26,
+  L_ANKLE: 27,    R_ANKLE: 28,
+};
+
+// Spine angle target: 20–45° tilt from vertical
+const SPINE_GOOD_MIN = 15, SPINE_GOOD_MAX = 50;
+// Hip rotation ≥ 30° during backswing/downswing is good
+const HIP_GOOD_MIN = 20;
+// Balance: left-weight fraction should stay 0.35–0.65
+const BAL_GOOD_MIN = 0.35, BAL_GOOD_MAX = 0.65;
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let poseReady = false;
+let cameraRunning = false;
+
+// Metrics
+let spineAngle = null;
+let hipRotation = null;
+let balance = 0.5;        // 0 = full left, 1 = full right
+let swingPhase = 'Address';
+
+// Baseline hip angle (captured at address)
+let baselineHipAngle = null;
+let baselineFrames = 0;
+
+// Hip history for sparkline
+const hipHistory = [];
+const HIP_HISTORY_MAX = 120;
+
+// FPS counter
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 0;
+
+// Recording
+const RECORD_DURATION_MS = 3000;
+let recording = false;
+let recordFrames = [];    // array of ImageData
+let recordStart = 0;
+let replayFrames = [];
+let replayInterval = null;
+let replayIndex = 0;
+
+// ─────────────────────────────────────────────
+//  DOM REFS
+// ─────────────────────────────────────────────
+const video        = document.getElementById('inputVideo');
+const canvas       = document.getElementById('outputCanvas');
+const ctx          = canvas.getContext('2d');
+const replayCanvas = document.getElementById('replayCanvas');
+const replayCtx    = replayCanvas.getContext('2d');
+const sparkCanvas  = document.getElementById('sparkCanvas');
+const sparkCtx     = sparkCanvas.getContext('2d');
+
+const phaseBadge   = document.getElementById('phaseBadge');
+const fpsBadge     = document.getElementById('fpsBadge');
+const mSpine       = document.getElementById('mSpine');
+const mHip         = document.getElementById('mHip');
+const mPhase       = document.getElementById('mPhase');
+const balanceBar   = document.getElementById('balanceBar');
+const sSpine       = document.getElementById('sSpine');
+const sHip         = document.getElementById('sHip');
+const sBalance     = document.getElementById('sBalance');
+const btnStart     = document.getElementById('btnStart');
+const btnRecord    = document.getElementById('btnRecord');
+const btnReplay    = document.getElementById('btnReplay');
+const replaySection= document.getElementById('replaySection');
+const replaySlider = document.getElementById('replaySlider');
+const replayTimeEl = document.getElementById('replayTime');
+const statusBar      = document.getElementById('statusBar');
+const fileInput      = document.getElementById('fileInput');
+const btnUpload      = document.getElementById('btnUpload');
+const fileSeekSection= document.getElementById('fileSeekSection');
+const fileSeekBar    = document.getElementById('fileSeekBar');
+const fileTimeDisplay= document.getElementById('fileTimeDisplay');
+const btnPlayPause   = document.getElementById('btnPlayPause');
+
+// file-mode state
+let fileMode = false;
+let animFrameId = null;
+
+// ─────────────────────────────────────────────
+//  MATH HELPERS
+// ─────────────────────────────────────────────
+function angleDeg(a, b, c) {
+  // Angle at vertex b, given points a, b, c (each with x,y)
+  const ab = { x: a.x - b.x, y: a.y - b.y };
+  const cb = { x: c.x - b.x, y: c.y - b.y };
+  const dot = ab.x * cb.x + ab.y * cb.y;
+  const mag = Math.sqrt((ab.x**2 + ab.y**2) * (cb.x**2 + cb.y**2));
+  if (mag === 0) return 0;
+  return Math.acos(Math.min(1, Math.max(-1, dot / mag))) * (180 / Math.PI);
+}
+
+function midpoint(a, b) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function vectorAngleDeg(a, b) {
+  // Angle of vector from a to b relative to horizontal
+  return Math.atan2(b.y - a.y, b.x - a.x) * (180 / Math.PI);
+}
+
+// ─────────────────────────────────────────────
+//  ANALYSIS
+// ─────────────────────────────────────────────
+function analyze(landmarks) {
+  const lm = landmarks;
+
+  // ── Spine Angle: angle between midpoint-shoulder to midpoint-hip vs. vertical
+  const shoulderMid = midpoint(lm[LM.L_SHOULDER], lm[LM.R_SHOULDER]);
+  const hipMid      = midpoint(lm[LM.L_HIP], lm[LM.R_HIP]);
+  // Compute tilt from vertical
+  const dx = shoulderMid.x - hipMid.x;
+  const dy = shoulderMid.y - hipMid.y;
+  spineAngle = Math.abs(Math.atan2(dx, -dy) * (180 / Math.PI));
+
+  // ── Hip Rotation: horizontal angle of hip line relative to baseline
+  const currentHipAngle = vectorAngleDeg(lm[LM.L_HIP], lm[LM.R_HIP]);
+  if (baselineFrames < 30) {
+    // Accumulate baseline for first ~1 sec
+    if (baselineHipAngle === null) baselineHipAngle = currentHipAngle;
+    else baselineHipAngle = baselineHipAngle * 0.9 + currentHipAngle * 0.1;
+    baselineFrames++;
+  }
+  hipRotation = baselineHipAngle !== null
+    ? Math.abs(currentHipAngle - baselineHipAngle)
+    : 0;
+
+  // Keep history
+  hipHistory.push(hipRotation);
+  if (hipHistory.length > HIP_HISTORY_MAX) hipHistory.shift();
+
+  // ── Balance: compare X of ankle midpoint vs hip midpoint
+  const lAnkle = lm[LM.L_ANKLE], rAnkle = lm[LM.R_ANKLE];
+  // Use horizontal shoulder vs midpoint to estimate weight shift
+  const ankleMid = midpoint(lAnkle, rAnkle);
+  const hipToAnkleX = hipMid.x - ankleMid.x;
+  // Map range [-0.1, 0.1] -> [0,1]  (negative = leaning left)
+  balance = Math.min(1, Math.max(0, 0.5 + hipToAnkleX * 5));
+
+  // ── Swing Phase: based on average wrist Y vs hip Y
+  const avgWristY = (lm[LM.L_WRIST].y + lm[LM.R_WRIST].y) / 2;
+  const hipY      = hipMid.y;
+  const wristRelative = avgWristY - hipY; // negative = wrists above hips
+
+  const prevPhase = swingPhase;
+  if (hipRotation < 8 && Math.abs(wristRelative) < 0.08) {
+    swingPhase = 'Address';
+  } else if (wristRelative < -0.15 && hipRotation < 30) {
+    swingPhase = 'Backswing';
+  } else if (wristRelative < -0.10) {
+    swingPhase = 'Top of Swing';
+  } else if (wristRelative >= -0.10 && wristRelative < 0.05 && hipRotation >= 15) {
+    swingPhase = 'Downswing';
+  } else if (wristRelative >= 0.05) {
+    swingPhase = 'Follow-through';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SCORE BADGES
+// ─────────────────────────────────────────────
+function setBadge(el, pass, waitIfNull) {
+  if (waitIfNull) { el.className = 'badge wait'; el.textContent = 'WAIT'; return; }
+  if (pass) { el.className = 'badge pass'; el.textContent = '✓ GOOD'; }
+  else       { el.className = 'badge fail'; el.textContent = '✗ FIX'; }
+}
+
+// ─────────────────────────────────────────────
+//  SPARKLINE
+// ─────────────────────────────────────────────
+function drawSparkline() {
+  const w = sparkCanvas.clientWidth || 248;
+  const h = sparkCanvas.clientHeight || 50;
+  sparkCanvas.width = w;
+  sparkCanvas.height = h;
+  sparkCtx.clearRect(0, 0, w, h);
+
+  if (hipHistory.length < 2) return;
+
+  const max = Math.max(...hipHistory, 30);
+  sparkCtx.strokeStyle = '#388bfd';
+  sparkCtx.lineWidth = 1.5;
+  sparkCtx.beginPath();
+  hipHistory.forEach((v, i) => {
+    const x = (i / (HIP_HISTORY_MAX - 1)) * w;
+    const y = h - (v / max) * h * 0.9 - 3;
+    i === 0 ? sparkCtx.moveTo(x, y) : sparkCtx.lineTo(x, y);
+  });
+  sparkCtx.stroke();
+
+  // Good threshold line
+  const threshY = h - (HIP_GOOD_MIN / max) * h * 0.9 - 3;
+  sparkCtx.strokeStyle = '#3fb95044';
+  sparkCtx.lineWidth = 1;
+  sparkCtx.setLineDash([4, 4]);
+  sparkCtx.beginPath();
+  sparkCtx.moveTo(0, threshY);
+  sparkCtx.lineTo(w, threshY);
+  sparkCtx.stroke();
+  sparkCtx.setLineDash([]);
+}
+
+// ─────────────────────────────────────────────
+//  POSE CALLBACK
+// ─────────────────────────────────────────────
+function onResults(results) {
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastTime >= 1000) {
+    fps = frameCount;
+    frameCount = 0;
+    lastTime = now;
+    fpsBadge.textContent = `${fps} fps`;
+  }
+
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+  if (results.poseLandmarks) {
+    // Draw skeleton
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#30363d', lineWidth: 2 });
+    drawLandmarks(ctx, results.poseLandmarks, { color: '#58a6ff', fillColor: '#58a6ff88', radius: 4 });
+
+    analyze(results.poseLandmarks);
+    updateUI();
+  }
+
+  ctx.restore();
+
+  // Record frame if active
+  if (recording) {
+    recordFrames.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (Date.now() - recordStart >= RECORD_DURATION_MS) {
+      stopRecording();
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+//  UI UPDATE
+// ─────────────────────────────────────────────
+function updateUI() {
+  // Metrics
+  mSpine.textContent = spineAngle !== null ? `${spineAngle.toFixed(1)}°` : '—°';
+  mHip.textContent   = hipRotation !== null ? `${hipRotation.toFixed(1)}°` : '—°';
+  mPhase.textContent = swingPhase;
+  phaseBadge.textContent = swingPhase;
+
+  // Balance bar
+  balanceBar.style.width = `${balance * 100}%`;
+
+  // Score badges
+  const hasData = spineAngle !== null && baselineFrames >= 30;
+  setBadge(sSpine,   spineAngle >= SPINE_GOOD_MIN && spineAngle <= SPINE_GOOD_MAX, !hasData);
+  setBadge(sHip,     hipRotation >= HIP_GOOD_MIN, !hasData);
+  setBadge(sBalance, balance >= BAL_GOOD_MIN && balance <= BAL_GOOD_MAX, !hasData);
+
+  // Sparkline
+  drawSparkline();
+}
+
+// ─────────────────────────────────────────────
+//  RECORDING
+// ─────────────────────────────────────────────
+function startRecording() {
+  recordFrames = [];
+  recording = true;
+  recordStart = Date.now();
+  btnRecord.textContent = '⏹ Recording…';
+  btnRecord.classList.add('recording');
+  statusBar.textContent = 'Recording 3-second swing clip…';
+}
+
+function stopRecording() {
+  recording = false;
+  replayFrames = [...recordFrames];
+  btnRecord.textContent = '⏺ Record Swing';
+  btnRecord.classList.remove('recording');
+  btnReplay.disabled = false;
+  replaySlider.max = replayFrames.length - 1;
+  replaySlider.value = 0;
+  statusBar.textContent = `Captured ${replayFrames.length} frames. Click "Replay" to review.`;
+}
+
+// ─────────────────────────────────────────────
+//  REPLAY
+// ─────────────────────────────────────────────
+function startReplay() {
+  if (!replayFrames.length) return;
+  replaySection.style.display = 'flex';
+  replayIndex = 0;
+  clearInterval(replayInterval);
+  replayInterval = setInterval(() => {
+    if (replayIndex >= replayFrames.length) {
+      replayIndex = 0;
+    }
+    replayCtx.putImageData(replayFrames[replayIndex], 0, 0);
+    replaySlider.value = replayIndex;
+    replayTimeEl.textContent = `${(replayIndex / 30).toFixed(1)}s`;
+    replayIndex++;
+  }, 1000 / 30);
+}
+
+replaySlider.addEventListener('input', () => {
+  const i = parseInt(replaySlider.value, 10);
+  clearInterval(replayInterval);
+  replayCtx.putImageData(replayFrames[i], 0, 0);
+  replayTimeEl.textContent = `${(i / 30).toFixed(1)}s`;
+});
+
+// ─────────────────────────────────────────────
+//  MEDIAPIPE SETUP
+// ─────────────────────────────────────────────
+function initPose() {
+  const pose = new Pose({
+    locateFile: (file) =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+  });
+
+  pose.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: false,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+
+  pose.onResults(onResults);
+  return pose;
+}
+
+// ─────────────────────────────────────────────
+//  SHARED: stop whatever source is active
+// ─────────────────────────────────────────────
+function stopCurrentSource() {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+  if (video.src) {
+    video.pause();
+    URL.revokeObjectURL(video.src);
+    video.removeAttribute('src');
+    video.load();
+  }
+  cameraRunning = false;
+  fileMode = false;
+  fileSeekSection.style.display = 'none';
+  btnRecord.disabled = true;
+}
+
+// ─────────────────────────────────────────────
+//  SHARED: run pose loop (works for any video)
+// ─────────────────────────────────────────────
+function startPoseLoop(pose, isFile) {
+  async function processFrame() {
+    if (video.paused || video.ended) {
+      if (isFile) {
+        // stay idle until user hits play again
+        animFrameId = requestAnimationFrame(processFrame);
+        return;
+      }
+      return; // webcam stream ended
+    }
+    await pose.send({ image: video });
+    animFrameId = requestAnimationFrame(processFrame);
+  }
+  animFrameId = requestAnimationFrame(processFrame);
+}
+
+// ─────────────────────────────────────────────
+//  START CAMERA
+// ─────────────────────────────────────────────
+btnStart.addEventListener('click', async () => {
+  if (cameraRunning) return;
+  stopCurrentSource();
+  btnStart.disabled = true;
+  statusBar.textContent = 'Loading MediaPipe Pose model…';
+
+  const pose = initPose();
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+    replayCanvas.width  = canvas.width;
+    replayCanvas.height = canvas.height;
+
+    cameraRunning = true;
+    fileMode = false;
+    btnStart.disabled = false;
+    btnRecord.disabled = false;
+    statusBar.textContent = 'Camera active. Calibrating baseline (hold address position)…';
+
+    startPoseLoop(pose, false);
+  } catch (err) {
+    btnStart.disabled = false;
+    statusBar.textContent = `Camera error: ${err.message}`;
+    console.error(err);
+  }
+});
+
+// ─────────────────────────────────────────────
+//  UPLOAD VIDEO FILE
+// ─────────────────────────────────────────────
+btnUpload.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  stopCurrentSource();
+  // Reset baseline so it calibrates from video start
+  baselineHipAngle = null;
+  baselineFrames = 0;
+  hipHistory.length = 0;
+
+  statusBar.textContent = 'Loading MediaPipe Pose model…';
+  btnUpload.style.opacity = '0.5';
+
+  const pose = initPose();
+
+  const objectUrl = URL.createObjectURL(file);
+  video.src = objectUrl;
+  video.srcObject = null;
+  video.muted = true;
+
+  await new Promise((resolve, reject) => {
+    video.onloadedmetadata = resolve;
+    video.onerror = reject;
+  });
+
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  replayCanvas.width  = canvas.width;
+  replayCanvas.height = canvas.height;
+
+  fileSeekBar.max = video.duration;
+  fileSeekBar.value = 0;
+  fileTimeDisplay.textContent = `0.0s / ${video.duration.toFixed(1)}s`;
+  fileSeekSection.style.display = 'block';
+
+  fileMode = true;
+  cameraRunning = false;
+  btnRecord.disabled = false;
+  btnUpload.style.opacity = '1';
+  btnPlayPause.textContent = '⏸ Pause';
+  statusBar.textContent = `Loaded: ${file.name} — analyzing…`;
+
+  await video.play();
+  startPoseLoop(pose, true);
+
+  // Keep seek bar in sync with video playback
+  video.addEventListener('timeupdate', () => {
+    fileSeekBar.value = video.currentTime;
+    fileTimeDisplay.textContent =
+      `${video.currentTime.toFixed(1)}s / ${video.duration.toFixed(1)}s`;
+  });
+
+  video.addEventListener('ended', () => {
+    btnPlayPause.textContent = '▶ Play';
+    statusBar.textContent = 'Video ended. Scrub or replay to review.';
+  });
+
+  // clear input so re-selecting same file triggers change again
+  fileInput.value = '';
+});
+
+// Seek bar scrubbing
+fileSeekBar.addEventListener('input', () => {
+  if (fileMode) video.currentTime = parseFloat(fileSeekBar.value);
+});
+
+// Play / Pause toggle
+btnPlayPause.addEventListener('click', () => {
+  if (!fileMode) return;
+  if (video.paused || video.ended) {
+    video.play();
+    btnPlayPause.textContent = '⏸ Pause';
+  } else {
+    video.pause();
+    btnPlayPause.textContent = '▶ Play';
+  }
+});
+
+btnRecord.addEventListener('click', () => {
+  if (!recording) startRecording();
+});
+
+btnReplay.addEventListener('click', () => {
+  startReplay();
+});
+</script>
+</body>
+</html>
