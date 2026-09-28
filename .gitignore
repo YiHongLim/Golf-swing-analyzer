@@ -1,0 +1,8 @@
+# Dependencies
+node_modules/
+
+# Secret — never commit the API key
+.env
+
+# macOS
+.DS_Store

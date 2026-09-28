@@ -362,6 +362,15 @@
       </div>
     </div>
 
+    <!-- ── AI Tips ── -->
+    <div class="card" id="aiTipsCard">
+      <h2>💡 AI Swing Tips</h2>
+      <div id="aiTipsBody" style="font-size:0.84rem;color:#8b949e;line-height:1.6;">
+        Complete a swing to get personalised tips.
+      </div>
+      <div id="aiTipsStatus" style="font-size:0.72rem;color:#6e7681;margin-top:8px;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -396,6 +405,10 @@ const BAL_GOOD_MIN = 0.35, BAL_GOOD_MAX = 0.65;
 // ─────────────────────────────────────────────
 let poseReady = false;
 let cameraRunning = false;
+
+// OpenAI
+let aiRequestPending = false;
+let lastTipPhase = '';        // prevent duplicate calls for same swing
 
 // Metrics
 let spineAngle = null;
@@ -458,6 +471,8 @@ const fileSeekSection= document.getElementById('fileSeekSection');
 const fileSeekBar    = document.getElementById('fileSeekBar');
 const fileTimeDisplay= document.getElementById('fileTimeDisplay');
 const btnPlayPause   = document.getElementById('btnPlayPause');
+const aiTipsBody     = document.getElementById('aiTipsBody');
+const aiTipsStatus   = document.getElementById('aiTipsStatus');
 
 // file-mode state
 let fileMode = false;
@@ -625,6 +640,45 @@ function onResults(results) {
 }
 
 // ─────────────────────────────────────────────
+//  OPENAI — request swing tip
+// ─────────────────────────────────────────────
+async function requestSwingTip(snapshot) {
+  if (aiRequestPending) return;
+  aiRequestPending = true;
+  aiTipsBody.textContent = '';
+  aiTipsStatus.textContent = '⏳ Analysing your swing…';
+
+  try {
+    const res = await fetch('/api/swing-tip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data.tip || 'No tips returned.';
+
+    // Render each numbered line as a styled paragraph
+    aiTipsBody.innerHTML = text
+      .split('\n')
+      .filter(l => l.trim())
+      .map(l => `<p style="margin-bottom:8px;color:#c9d1d9;">${l.trim()}</p>`)
+      .join('');
+    aiTipsStatus.textContent = `Updated at ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    aiTipsBody.textContent = '';
+    aiTipsStatus.textContent = `⚠️ ${err.message}`;
+  } finally {
+    aiRequestPending = false;
+  }
+}
+
+// ─────────────────────────────────────────────
 //  UI UPDATE
 // ─────────────────────────────────────────────
 function updateUI() {
@@ -645,6 +699,19 @@ function updateUI() {
 
   // Sparkline
   drawSparkline();
+
+  // Trigger AI tip when swing returns to Address after Follow-through
+  if (hasData && swingPhase === 'Address' && lastTipPhase === 'Follow-through') {
+    const snapshot = {
+      phase:      lastTipPhase,
+      spineAngle, hipRotation, balance,
+      spinePass:  spineAngle >= SPINE_GOOD_MIN && spineAngle <= SPINE_GOOD_MAX,
+      hipPass:    hipRotation >= HIP_GOOD_MIN,
+      balPass:    balance >= BAL_GOOD_MIN && balance <= BAL_GOOD_MAX,
+    };
+    requestSwingTip(snapshot);
+  }
+  lastTipPhase = swingPhase;
 }
 
 // ─────────────────────────────────────────────
@@ -885,6 +952,7 @@ btnRecord.addEventListener('click', () => {
 btnReplay.addEventListener('click', () => {
   startReplay();
 });
+
 </script>
 </body>
 </html>
